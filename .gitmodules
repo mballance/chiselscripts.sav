@@ -1,0 +1,8 @@
+[submodule "lib/chisel3"]
+	path = lib/chisel3
+	url = https://github.com/freechipsproject/chisel3.git
+	branch = master
+[submodule "lib/firrtl"]
+	path = lib/firrtl
+	url = https://github.com/freechipsproject/firrtl.git
+	branch = master
