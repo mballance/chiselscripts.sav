@@ -25,16 +25,16 @@ sub generate();
 sub collect_jars($);
 sub run_java(@);
 
-for ($i=0; $i<=$#ARGV; $i++) {
-	if ($ARGV[$i] eq "-help" || 
-		$ARGV[$i] eq "--help" ||
-		$ARGV[$i] eq "-h" ||
-		$ARGV[$i] eq "--h" ||
-		$ARGV[$i] eq "-?") {
-		printhelp();
-		exit(0);
-	}
-}
+#for ($i=0; $i<=$#ARGV; $i++) {
+#	if ($ARGV[$i] eq "-help" || 
+#		$ARGV[$i] eq "--help" ||
+#		$ARGV[$i] eq "-h" ||
+#		$ARGV[$i] eq "--h" ||
+#		$ARGV[$i] eq "-?") {
+#		printhelp();
+#		exit(0);
+#	}
+#}
 
 if ($cmd eq "compile") {
 	compile();
@@ -58,6 +58,7 @@ sub compile() {
 	my($classpath) = collect_jars($chiselscripts_libdir . "/cache");
 	my(@cmdline,@files);
 	my($arg,$classdir);
+	my($proc_options) = 1;
 	
 	for ($i=1; $i<=$#ARGV; $i++) {
 		$arg=$ARGV[$i];
@@ -75,6 +76,7 @@ sub compile() {
 				exit(1);
 			}
 		} else {
+			$proc_options = 0;
 			if (-f $arg) {
 				push(@files, $arg);
 			} elsif (-d $arg) {
@@ -110,11 +112,12 @@ sub compile() {
 sub generate() {
 	my($classpath) = collect_jars($chiselscripts_libdir . "/cache");
 	my(@cmdline,@args);
+	my($proc_options) = 1;
 	
 	for ($i=1; $i<=$#ARGV; $i++) {
 		$arg=$ARGV[$i];
 		
-		if ($arg =~ /^-/) {
+		if ($proc_options && $arg =~ /^-/) {
 			if ($arg eq "-classdir") {
 				$i++;
 				$classdir=$ARGV[$i];
@@ -122,11 +125,12 @@ sub generate() {
 				$i++;
 				$classpath .= ":" . $ARGV[$i];
 			} else {
-				print "Error: unknown compile option $arg\n";
+				print "Error: unknown generate option $arg\n";
 				printhelp();
 				exit(1);
 			}
 		} else {
+			$proc_options = 0;
 			push(@args, $arg);
 		}
 	}
