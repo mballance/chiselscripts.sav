@@ -11,11 +11,24 @@
 
 use Cwd 'abs_path';
 use File::Basename;
+use POSIX "uname";
+use IO::Compress::Zip qw(zip $ZipError) ;
+use File::Temp qw(tempdir);
+use File::Path qw(rmtree);
 
 $chisel_pl=abs_path($0);
 $chiselscripts_bindir=dirname($chisel_pl);
 $chiselscripts_dir=dirname($chiselscripts_bindir);
 $chiselscripts_libdir="$chiselscripts_dir/lib";
+
+($sysname,$nodename,$release,$version,$machine) = POSIX::uname();
+
+if ($sysname =~ /CYGWIN/) {
+	$pathsep=";";
+} else {
+	$pathsep=":";
+}
+
 
 $cmd=$ARGV[0];
 
@@ -24,17 +37,6 @@ sub compile();
 sub generate();
 sub collect_jars($);
 sub run_java(@);
-
-#for ($i=0; $i<=$#ARGV; $i++) {
-#	if ($ARGV[$i] eq "-help" || 
-#		$ARGV[$i] eq "--help" ||
-#		$ARGV[$i] eq "-h" ||
-#		$ARGV[$i] eq "--h" ||
-#		$ARGV[$i] eq "-?") {
-#		printhelp();
-#		exit(0);
-#	}
-#}
 
 if ($cmd eq "compile") {
 	compile();
@@ -56,9 +58,10 @@ sub printhelp() {
 
 sub compile() {
 	my($classpath) = collect_jars($chiselscripts_libdir . "/cache");
-	my(@cmdline,@files);
-	my($arg,$classdir);
+	my(@cmdline,@files,@dirstack);
+	my($arg,$classdir,$output);
 	my($proc_options) = 1;
+	my($delete_classdir) = 1;
 	
 	for ($i=1; $i<=$#ARGV; $i++) {
 		$arg=$ARGV[$i];
@@ -67,9 +70,24 @@ sub compile() {
 			if ($arg eq "-classdir") {
 				$i++;
 				$classdir=$ARGV[$i];
+				$delete_classdir = 0;
+			} elsif ($arg =~ /^-L/) {
+				$arg = substr($arg, 2);
+				if ($classpath eq "") {
+					$classpath .= resolve_path($arg);
+				} else {
+					$classpath .= $pathsep . resolve_path($arg);
+				}
 			} elsif ($arg eq "-classpath") {
 				$i++;
-				$classpath .= ":" . $ARGV[$i];
+				if ($classpath eq "") {
+					$classpath .= resolve_path($ARGV[$i]);
+				} else {
+					$classpath .= $pathsep . resolve_path($ARGV[$i]);
+				}
+			} elsif ($arg eq "-o") {
+				$i++;
+				$output = $ARGV[$i];
 			} else {
 				print "Error: unknown compile option $arg\n";
 				printhelp();
@@ -80,7 +98,28 @@ sub compile() {
 			if (-f $arg) {
 				push(@files, $arg);
 			} elsif (-d $arg) {
+				my($dir) = $arg;
+				my(@dirstack);
+				
+				push(@dirstack, $dir);
+				
 				# Directory
+				do {
+					$dir = pop(@dirstack);
+					
+					opendir (my $dh, $dir);
+					
+					while (my $file = readdir($dh)) {
+						unless ($file eq "." || $file eq "..") {
+							if ( -d "$dir/$file") {
+								push(@dirstack, "$dir/$file");
+							} else {
+								push(@files, "$dir/$file");
+							}
+						}
+					}
+					closedir($dh);
+				} while ($#dirstack >= 0);
 			} else {
 				print "Error: unknown argument $arg\n";
 				printhelp();
@@ -90,7 +129,12 @@ sub compile() {
 	}
 	
 	if ($classdir eq "") {
-		$classdir = "class";
+		$classdir = tempdir("chisel_XXXXXX");
+		print "classdir=$classdir\n";
+	}
+	
+	if ($output eq "") {
+		$output = "output.zip";
 	}
 	
 	unless (-d $classdir) {
@@ -107,6 +151,41 @@ sub compile() {
 	push(@cmdline, @files);
 
 	run_java(@cmdline);
+
+	my(@classes) = collect_classes($classdir);
+	zip	\@classes => $output,
+		FilterName => sub { s[^$classdir/][] } ;
+		
+	if ($delete_classdir) {
+		rmtree($classdir);
+	}
+}
+
+sub collect_classes($) {
+	my($classdir) = @_;
+	my(@classes,@dirstack);
+	my($dir);
+	
+	push(@dirstack, $classdir);
+	
+	do {
+		$dir = pop(@dirstack);
+		
+		opendir (my $dh, $dir);
+					
+		while (my $file = readdir($dh)) {
+			unless ($file eq "." || $file eq "..") {
+				if ( -d "$dir/$file") {
+					push(@dirstack, "$dir/$file");
+				} elsif ($file =~ /.class$/) {
+					push(@classes, "$dir/$file");
+				}
+			}
+		}
+		closedir($dh);
+	} while ($#dirstack >= 0);
+	
+	return @classes;
 }
 
 sub generate() {
@@ -123,7 +202,14 @@ sub generate() {
 				$classdir=$ARGV[$i];
 			} elsif ($arg eq "-classpath") {
 				$i++;
-				$classpath .= ":" . $ARGV[$i];
+				$classpath .= $pathsep . $ARGV[$i];
+			} elsif ($arg =~ /^-L/) {
+				$arg = substr($arg, 2);
+				if ($classpath eq "") {
+					$classpath .= resolve_path($arg);
+				} else {
+					$classpath .= $pathsep . resolve_path($arg);
+				}				
 			} else {
 				print "Error: unknown generate option $arg\n";
 				printhelp();
@@ -135,11 +221,11 @@ sub generate() {
 		}
 	}
 	
-	if ($classdir eq "") {
-		$classdir = "class";
-	}
-
-	$classpath = $classdir . ":" . $classpath;	
+#	if ($classdir eq "") {
+#		$classdir = "class";
+#	}
+#
+#	$classpath = $classdir . $pathsep . $classpath;	
 
 	push(@cmdline, "-classpath");
 	push(@cmdline, $classpath);
@@ -149,6 +235,7 @@ sub generate() {
 	run_java(@cmdline);	
 }
 
+
 sub collect_jars($) {
 	my($lib_dir) = @_;
 	my($classpath);
@@ -157,10 +244,12 @@ sub collect_jars($) {
 
 	while (my $file = readdir($dir)) {
 		if ($file =~ /.jar/) {
+			my($path) = resolve_path($lib_dir . "/" . $file);
+			
 			if ($classpath eq "") {
-				$classpath = $lib_dir . "/" . $file;
+				$classpath = $path;
 			} else {
-				$classpath .= ":" . $lib_dir . "/" . $file;
+				$classpath .= $pathsep . $path;
 			}
 		}
 	}
@@ -168,6 +257,16 @@ sub collect_jars($) {
 	closedir($dir);
 	
 	return $classpath;
+}
+
+sub resolve_path($) {
+	my($path) = @_;
+	
+	if ($sysname =~ /CYGWIN/ && $path =~ /^\/cygdrive/) {
+		$path =~ s%/cygdrive/([a-zA-Z])%$1:%;
+	}
+
+	return $path;	
 }
 
 sub run_java(@) {
@@ -179,7 +278,7 @@ sub run_java(@) {
 	push(@args, "-Dscala.usejavacp=true");
 	push(@args, @jargs);
 	
-	print "args=@args\n";
+#	print "args=@args\n";
 	
 	system(@args) == 0 or die "java failed to run @args\n";
 }
