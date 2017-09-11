@@ -141,6 +141,10 @@ sub compile() {
 		system("mkdir -p $classdir");
 	}
 	
+	if ($#files < 0) {
+		die "No source files specified";
+	}
+	
 	push(@cmdline, "-classpath");
 	push(@cmdline, $classpath);
 	push(@cmdline, "scala.tools.nsc.Main");
@@ -149,7 +153,7 @@ sub compile() {
 	push(@cmdline, $classdir);
 	
 	push(@cmdline, @files);
-
+	
 	run_java(@cmdline);
 
 	my(@classes) = collect_classes($classdir);
