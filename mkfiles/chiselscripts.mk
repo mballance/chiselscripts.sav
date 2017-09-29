@@ -8,6 +8,14 @@ CHISELG := $(CHISELSCRIPTS_BINDIR)/chisel.pl generate
 
 ifneq (1,$(RULES))
 
+define DO_CHISELC
+$(CHISELC) -o $@ $(filter-out %.jar,$^) $(foreach l,$(sort $(filter %.jar,$^)),-L$(l))
+endef
+
+define DO_CHISELG
+$(CHISELG) $(foreach l,$(sort $(filter %.jar,$^)),-L$(l))
+endef
+
 else # Rules
 
 endif

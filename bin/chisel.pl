@@ -15,6 +15,9 @@ use POSIX "uname";
 use IO::Compress::Zip qw(zip $ZipError) ;
 use File::Temp qw(tempdir);
 use File::Path qw(rmtree);
+use IO::Handle;
+
+$| = 1; # Force auto-flush of stdout
 
 $chisel_pl=abs_path($0);
 $chiselscripts_bindir=dirname($chisel_pl);
@@ -23,12 +26,14 @@ $chiselscripts_libdir="$chiselscripts_dir/lib";
 
 ($sysname,$nodename,$release,$version,$machine) = POSIX::uname();
 
-if ($sysname =~ /CYGWIN/) {
+# print "sysname=$sysname\n";
+if ($sysname =~ /CYGWIN/ || $sysname =~ /MINGW/ || $sysname =~ /MSYS/) {
 	$pathsep=";";
 } else {
 	$pathsep=":";
 }
 
+# $ENV{MSYS2_ARG_CONV_EXCL}="*";
 
 $cmd=$ARGV[0];
 
@@ -87,7 +92,7 @@ sub compile() {
 				}
 			} elsif ($arg eq "-o") {
 				$i++;
-				$output = $ARGV[$i];
+				$output = resolve_path($ARGV[$i]);
 			} else {
 				print "Error: unknown compile option $arg\n";
 				printhelp();
@@ -96,7 +101,7 @@ sub compile() {
 		} else {
 			$proc_options = 0;
 			if (-f $arg) {
-				push(@files, $arg);
+				push(@files, resolve_path($arg));
 			} elsif (-d $arg) {
 				my($dir) = $arg;
 				my(@dirstack);
@@ -112,9 +117,9 @@ sub compile() {
 					while (my $file = readdir($dh)) {
 						unless ($file eq "." || $file eq "..") {
 							if ( -d "$dir/$file") {
-								push(@dirstack, "$dir/$file");
+								push(@dirstack, resolve_path("$dir/$file"));
 							} else {
-								push(@files, "$dir/$file");
+								push(@files, resolve_path("$dir/$file"));
 							}
 						}
 					}
@@ -130,11 +135,10 @@ sub compile() {
 	
 	if ($classdir eq "") {
 		$classdir = tempdir("chisel_XXXXXX");
-		print "classdir=$classdir\n";
 	}
 	
 	if ($output eq "") {
-		$output = "output.zip";
+		$output = "output.jar";
 	}
 	
 	unless (-d $classdir) {
@@ -153,6 +157,9 @@ sub compile() {
 	push(@cmdline, $classdir);
 	
 	push(@cmdline, @files);
+	
+	print("Note: compiling Chisel library ${output}\n");
+	select(STDOUT)->flush();
 	
 	run_java(@cmdline);
 
@@ -196,6 +203,7 @@ sub generate() {
 	my($classpath) = collect_jars($chiselscripts_libdir . "/cache");
 	my(@cmdline,@args);
 	my($proc_options) = 1;
+	my($generator) = "";
 	
 	for ($i=1; $i<=$#ARGV; $i++) {
 		$arg=$ARGV[$i];
@@ -221,6 +229,9 @@ sub generate() {
 			}
 		} else {
 			$proc_options = 0;
+			if ($generator eq "") {
+				$generator = $arg;
+			}
 			push(@args, $arg);
 		}
 	}
@@ -231,6 +242,8 @@ sub generate() {
 #
 #	$classpath = $classdir . $pathsep . $classpath;	
 
+	print("Note: Running Chisel generator ${generator}\n");
+	select(STDOUT)->flush();
 	push(@cmdline, "-classpath");
 	push(@cmdline, $classpath);
 	push(@cmdline, "scala.tools.nsc.MainGenericRunner");
@@ -268,6 +281,8 @@ sub resolve_path($) {
 	
 	if ($sysname =~ /CYGWIN/ && $path =~ /^\/cygdrive/) {
 		$path =~ s%/cygdrive/([a-zA-Z])%$1:%;
+	} elsif ($sysname =~ /MSYS/ || $sysname =~ /MINGW/) {
+		$path =~ s%^/([a-zA-Z])%$1:%;
 	}
 
 	return $path;	
@@ -278,7 +293,7 @@ sub run_java(@) {
 	my(@args);
 	
 	push(@args, "java");
-	push(@args, "-Dscala.home=" . $chiselscripts_dir);
+	push(@args, "-Dscala.home=" . resolve_path($chiselscripts_dir));
 	push(@args, "-Dscala.usejavacp=true");
 	push(@args, @jargs);
 	
