@@ -9,6 +9,7 @@
 #* By default, 
 #****************************************************************************
 
+use Cwd;
 use Cwd 'abs_path';
 use File::Basename;
 use POSIX "uname";
@@ -163,9 +164,23 @@ sub compile() {
 	
 	run_java(@cmdline);
 
-	my(@classes) = collect_classes($classdir);
-	zip	\@classes => $output,
-		FilterName => sub { s[^$classdir/][] } ;
+    my($output_a) = abs_path($output);
+    my($classdir_a) = abs_path($classdir);
+#    my($cwd) = getcwd();
+#	chdir($clssdir_a);
+#    my($new_cwd) = getcwd();
+#    print "CWD=$new_cwd afer chdir to $classdir_a\n";
+	system("cd $classdir_a ; zip -r $output_a *");
+#    print("--> collect_classes\n");
+#	my(@classes) = collect_classes(".");
+#    print("<-- collect_classes\n");
+#	zip	\@classes => $output,
+#		FilterName => sub { s[^$classdir/][] } ;
+#    print("--> zip\n");
+#	zip	\@classes => $output_a;
+#    print("<-- zip\n");
+
+#    chdir($cwd);
 		
 	if ($delete_classdir) {
 		rmtree($classdir);
