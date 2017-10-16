@@ -61,8 +61,9 @@ $(CS_LIB)/firrtl.jar : $(FIRRTL_SRC)
 			echo "FIRRTL path=$$p"; \
 			if test -f $$p; then \
 				is_jar=`echo $$p | sed -e 's/.*\.jar/true/g'`; \
-				echo "  is_jar=$${is_jar}"; \
-				if test "x$${is_jar}" = "xtrue"; then \
+                is_ivy=`echo $$p | sed -e 's/.*ivy2.*/true/g'`; \
+				echo "is_jar=$${is_jar} is_ivy=$${is_ivy}"; \
+				if test "x$${is_jar}" = "xtrue" && test "x$${is_ivy}" = "xtrue"; then \
 					new_name=`basename $$p | sed -e 's/-[0-9][0-9\.]*\.jar/.jar/g' -e 's/_[0-9][0-9\.]*\.jar/.jar/g'`; \
 					echo "new_name=$$new_name"; \
 					cp $$p $(CS_LIB)/$$new_name; \
@@ -87,16 +88,28 @@ $(CS_LIB)/chisel3.jar : $(CS_LIB)/firrtl.jar $(CHISEL3_SRC)
 			echo "CHISEL path=$$p"; \
 			if test -f $$p; then \
 				is_jar=`echo $$p | sed -e 's/.*\.jar/true/g'`; \
-				if test "x$${is_jar}" = "xtrue"; then \
+                is_ivy=`echo $$p | sed -e 's/.*ivy2.*/true/g'`; \
+				echo "is_jar=$${is_jar} is_ivy=$${is_ivy}"; \
+				if test "x$${is_jar}" = "xtrue" && test "x$${is_ivy}" = "xtrue"; then \
 					new_name=`basename $$p | sed -e 's/[-_][0-9][0-9\.]*\.jar/.jar/g' -e 's/_[0-9][0-9\.]*\.jar/.jar/g'`; \
 					echo "new_name=$$new_name"; \
 					cp $$p $(CS_LIB)/$$new_name; \
 				fi \
 			fi \
 		done
-	$(Q)sc_jar=`grep 'scala-compiler' \
-		$(CS_LIB)/chisel3/target/scala-*/resolution-cache/reports/edu.berkeley.cs-chisel3_*-plugin.xml \
-		| grep 'jar' | grep -v 'https' | sed -e 's/.*\(scala-compiler.*.jar\).*/\1/g'`; \
+#resolution-cache/reports/edu.berkeley.cs-chisel3_2.11-plugin.xml
+	$(Q)if test -d $(CS_LIB)/chisel3/target/resolution-cache; then \
+          sc_jar=`grep 'scala-compiler' \
+		    $(CS_LIB)/chisel3/target/resolution-cache/reports/edu.berkeley.cs-chisel3_*-plugin.xml \
+    		| grep 'jar' | grep -v 'https' | sed -e 's/.*\(scala-compiler.*.jar\).*/\1/g'`; \
+        elif test -d $(CS_LIB)/chisel3/target/scala-*; then \
+          sc_jar=`grep 'scala-compiler' \
+		    $(CS_LIB)/chisel3/target/scala-*/resolution-cache/reports/edu.berkeley.cs-chisel3_*-plugin.xml \
+    		| grep 'jar' | grep -v 'https' | sed -e 's/.*\(scala-compiler.*.jar\).*/\1/g'`; \
+        else \
+		  echo "Error: unknown chisel3 target directory structure"; exit 1; \
+        fi ; \
+		echo "sc_jar=$$sc_jar"; \
 		new_name=`basename $$sc_jar | sed -e 's/[-_][0-9][0-9\.]*\.jar/.jar/g' -e 's/_[0-9][0-9\.]*\.jar/.jar/g'`; \
 		cp $(IVY2_CACHE)/org.scala-lang/scala-compiler/jars/$$sc_jar $(CS_LIB)/$$new_name
 	$(Q)rm -rf $(CS_LIB)/chisel3
