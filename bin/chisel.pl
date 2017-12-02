@@ -164,13 +164,18 @@ sub compile() {
 	
 	run_java(@cmdline);
 
-    my($output_a) = abs_path($output);
+    print "output=$output\n";
+    my($output_dir) = abs_path(dirname($output));
+    my($output_file) = basename($output);
+    print("dirname(output)=$output_dir output_file=$output_file\n");
+#    my($output_a) = abs_path($output);
     my($classdir_a) = abs_path($classdir);
 #    my($cwd) = getcwd();
 #	chdir($clssdir_a);
 #    my($new_cwd) = getcwd();
 #    print "CWD=$new_cwd afer chdir to $classdir_a\n";
-	system("cd $classdir_a ; zip -r $output_a *");
+	system("cd $classdir_a ; zip -r ${output_dir}/${output_file} *") 
+		&& die "Failed to create ${output_dir}/${output_file}";
 #    print("--> collect_classes\n");
 #	my(@classes) = collect_classes(".");
 #    print("<-- collect_classes\n");
@@ -181,10 +186,12 @@ sub compile() {
 #    print("<-- zip\n");
 
 #    chdir($cwd);
-		
-	if ($delete_classdir) {
-		rmtree($classdir);
-	}
+	
+	system("rm -rf $classdir") && die "Failed to remove $classdir";
+
+#	if ($delete_classdir) {
+#		rmtree($classdir);
+#	}
 }
 
 sub collect_classes($) {
@@ -308,6 +315,7 @@ sub run_java(@) {
 	my(@args);
 	
 	push(@args, "java");
+	push(@args, "-Xmx1024m");
 	push(@args, "-Dscala.home=" . resolve_path($chiselscripts_dir));
 	push(@args, "-Dscala.usejavacp=true");
 	push(@args, @jargs);
