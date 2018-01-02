@@ -164,13 +164,20 @@ sub compile() {
 	
 	run_java(@cmdline);
 
-    my($output_a) = abs_path($output);
-    my($classdir_a) = abs_path($classdir);
+#    my($output_a) = abs_path($output);
+    print "output=$output\n";
+    my($output_dir) = abs_path(dirname($output));
+    my($output_file) = basename($output);
+    print("dirname(output)=$output_dir output_file=$output_file\n");
+    
+     my($classdir_a) = abs_path($classdir);
 #    my($cwd) = getcwd();
 #	chdir($clssdir_a);
 #    my($new_cwd) = getcwd();
 #    print "CWD=$new_cwd afer chdir to $classdir_a\n";
-	system("cd $classdir_a ; zip -r $output_a *");
+    system("cd $classdir_a ; zip -r ${output_dir}/${output_file} *")
+            && die "Failed to create ${output_dir}/${output_file}";
+
 #    print("--> collect_classes\n");
 #	my(@classes) = collect_classes(".");
 #    print("<-- collect_classes\n");
@@ -219,6 +226,7 @@ sub generate() {
 	my(@cmdline,@args);
 	my($proc_options) = 1;
 	my($generator) = "";
+	my($outdir) = "";
 	
 	for ($i=1; $i<=$#ARGV; $i++) {
 		$arg=$ARGV[$i];
@@ -236,7 +244,10 @@ sub generate() {
 					$classpath .= resolve_path($arg);
 				} else {
 					$classpath .= $pathsep . resolve_path($arg);
-				}				
+				}
+			} elsif ($arg eq "-outdir") {
+				$i++;
+				$outdir = $ARGV[$i];
 			} else {
 				print "Error: unknown generate option $arg\n";
 				printhelp();
@@ -262,9 +273,85 @@ sub generate() {
 	push(@cmdline, "-classpath");
 	push(@cmdline, $classpath);
 	push(@cmdline, "scala.tools.nsc.MainGenericRunner");
+	
+	unless ($outdir eq "") {
+		my($outdir_name) = basename($outdir);
+		
+		print "outdir_name=$outdir_name outdir=$outdir\n";
+		
+		if (-d $outdir) {
+			# Clean up first
+			print "Removing outdir $outdir\n";
+			system("rm -rf $outdir");
+		}
+		print "Creating outdir $outdir\n";
+		system("mkdir -p $outdir");	
+		push(@args, "-o");
+		push(@args, resolve_path($outdir) . "/${outdir_name}_tmp.v");
+	}
 	push(@cmdline, @args);
 	
 	run_java(@cmdline);	
+	
+	unless ($outdir eq "") {
+		my($header);
+		my($line);
+		my($done) = 0;
+		my($outdir_r) = resolve_path(abs_path($outdir));
+		my($outdir_name) = basename($outdir);
+		my($module_name);
+		
+		print "outdir_name=$outdir_name outdir=$outdir\n";
+		
+		print "Post-processing output file\n";
+		open(my $fh, "<", "$outdir/${outdir_name}_tmp.v") || 
+			die "Failed to open root module file $outdir/${outdir_name}.v";
+		open(my $fh_f, ">", "$outdir/${outdir_name}.f") || 
+			die "Failed to open filelist $outdir/${outdir_name}.f";
+		
+		# First read all lines leading up to the first module
+		while (<$fh>) {
+			$line = $_;
+			if ($line =~ /^module /) {
+				last;
+			} else {
+				$prefix .= $line;
+			}
+		}
+
+		while ($done == 0) {
+			# Already have $line
+			$module_name = $line;
+			chomp($module_name);
+			$module_name =~ s/^module ([a-zA-Z0-9_][a-zA-Z0-9_]*).*$/$1/g;
+			print "Create module file $outdir/${module_name}.v\n";
+			open(my $fh_m, ">", "$outdir/${module_name}.v") || 
+				die "Failed to open module file $outdir/${module_name}.v";
+			print $fh_m "$prefix";
+			print $fh_m "$line"; # module declaration
+			print $fh_f "${outdir_r}/${module_name}.v\n";
+			
+			while (1) {
+				$line = <$fh>;
+			
+				if ($line eq "") {
+					print "Done\n";
+					$done = 1;
+					last;
+				} else {
+					if ($line =~ /^module /) {
+						last;
+					} else {
+						print $fh_m "$line";
+					}
+				}
+			}
+			close($fh_m);
+		}	
+		close($fh_f);
+		close($fh);
+		system("rm -f $outdir/${outdir_name}_tmp.v");
+	}
 }
 
 
