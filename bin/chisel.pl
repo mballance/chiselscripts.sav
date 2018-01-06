@@ -393,7 +393,7 @@ sub run_java(@) {
 	my(@args);
 	
 	push(@args, "java");
-	push(@args, "-Xmx1024m");
+	push(@args, "-Xmx4906m");
 	push(@args, "-Dscala.home=" . resolve_path($chiselscripts_dir));
 	push(@args, "-Dscala.usejavacp=true");
 	push(@args, @jargs);
