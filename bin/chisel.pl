@@ -63,7 +63,7 @@ sub printhelp() {
 }
 
 sub compile() {
-	my($classpath) = collect_jars($chiselscripts_libdir . "/cache");
+	my($classpath) = collect_jars($chiselscripts_libdir);
 	my(@cmdline,@files,@dirstack);
 	my($arg,$classdir,$output);
 	my($proc_options) = 1;
