@@ -1,0 +1,4 @@
+name=chiselscripts
+version=0.0.1
+rootvar=CHISELSCRIPTS_DIR
+

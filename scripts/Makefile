@@ -28,17 +28,17 @@ build : \
 	$(LIB_DIR)/chisel3.jar 
 
 release : build
-	$(Q)rm -rf $(BUILD_DIR)/release
-	$(Q)mkdir -p $(BUILD_DIR)/release
+	$(Q)rm -rf $(BUILD_DIR)/chiselscripts
+	$(Q)mkdir -p $(BUILD_DIR)/chiselscripts
 	$(Q)cp -r \
           $(CHISELSCRIPTS_DIR)/etc \
           $(CHISELSCRIPTS_DIR)/bin \
           $(CHISELSCRIPTS_DIR)/lib \
           $(CHISELSCRIPTS_DIR)/mkfiles \
-          $(BUILD_DIR)/release
-	$(Q)cd $(BUILD_DIR)/release ; \
-		tar czf $(BUILD_DIR)/chiselscripts-$(version).tar.gz *
-	$(Q)rm -rf $(BUILD_DIR)/release
+          $(BUILD_DIR)/chiselscripts
+	$(Q)cd $(BUILD_DIR) ; \
+          tar czf $(BUILD_DIR)/chiselscripts-$(version).tar.gz chiselscripts
+	$(Q)rm -rf $(BUILD_DIR)/chiselscripts
 
 $(LIB_DIR)/support.jar : $(LIB_DIR)/chisel3.jar $(LIB_DIR)/firrtl.jar
 	$(Q)rm -rf $(BUILD_DIR)/support
